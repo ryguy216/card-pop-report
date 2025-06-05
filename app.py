@@ -23,17 +23,17 @@ def search_psa(card_name):
     response = requests.get(url, headers=headers, verify=False)
 
     if response.status_code != 200:
-        return {"Company": "PSA", "Population": "Unavailable", "Image": None}
+        return {"Company": "PSA", "Population": "Error accessing PSA", "Image": None}
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # This is just placeholder logic – you'll want to refine it based on PSA's real page structure
+    # Placeholder values — replace with actual scraping logic later
     result_text = "Result found (scraping logic TBD)"
     image_url = "https://via.placeholder.com/150?text=PSA+Card"
 
     return {"Company": "PSA", "Population": result_text, "Image": image_url}
 
-# Placeholder scrapers (can be updated later)
+# Placeholder scrapers
 def search_bgs(card_name):
     return {
         "Company": "BGS",
@@ -69,9 +69,14 @@ if search_button and card_name:
         for result in results:
             col1, col2 = st.columns([1, 4])
             with col1:
-                st.image(result["Image"], width=150)
+                image_url = result.get("Image")
+                if image_url and isinstance(image_url, str) and image_url.startswith("http"):
+                    st.image(image_url, width=150)
+                else:
+                    st.write("No image available")
             with col2:
                 st.markdown(f"**{result['Company']}**")
                 st.write(result["Population"])
         st.success("Search completed.")
+
 
