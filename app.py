@@ -1,82 +1,109 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
 import pandas as pd
-import urllib3
+from collections import defaultdict
 
-# Suppress SSL certificate warnings
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-st.set_page_config(page_title="Card Pop Report", layout="wide")
+st.set_page_config(page_title="Card Population Report", layout="wide")
 st.title("📊 Card Population Report Aggregator")
-st.write("Enter a card name to search population data across multiple grading companies (PSA, BGS, SGC, CGC).")
+st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts by grade.")
 
 card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
 
-# PSA Scraper
-def search_psa(card_name):
+# PSA population fetch via API
+def fetch_psa_population(card_name):
+    url = "https://www.psacard.com/api/population/card/search"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0"
     }
-    url = f"https://www.psacard.com/pop/search?query={card_name}"
-    response = requests.get(url, headers=headers, verify=False)
+    payload = {
+        "filters": {"term": card_name},
+        "page": 1,
+        "size": 10
+    }
 
-    if response.status_code != 200:
-        return {"Company": "PSA", "Population": "Error accessing PSA", "Image": None}
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        data = response.json()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+        results = defaultdict(int)
+        for card in data.get("results", []):
+            for item in card.get("grades", []):
+                grade = item.get("label")
+                pop = item.get("population", 0)
+                results[grade] += pop
 
-    # Placeholder values — replace with actual scraping logic later
-    result_text = "Result found (scraping logic TBD)"
-    image_url = "https://via.placeholder.com/150?text=PSA+Card"
+        return {"Company": "PSA", "Grades": dict(results), "Image": "https://via.placeholder.com/150?text=PSA"}
 
-    return {"Company": "PSA", "Population": result_text, "Image": image_url}
+    except Exception as e:
+        return {"Company": "PSA", "Grades": {"Error": str(e)}, "Image": None}
 
-# Placeholder scrapers
-def search_bgs(card_name):
+# Sample placeholders for other companies
+def fetch_bgs_population(card_name):
     return {
         "Company": "BGS",
-        "Population": "Sample BGS data",
-        "Image": "https://via.placeholder.com/150?text=BGS+Card"
+        "Grades": {"10": 15, "9.5": 30, "9": 50, "8.5": 12},
+        "Image": "https://via.placeholder.com/150?text=BGS"
     }
 
-def search_sgc(card_name):
+def fetch_sgc_population(card_name):
     return {
         "Company": "SGC",
-        "Population": "Sample SGC data",
-        "Image": "https://via.placeholder.com/150?text=SGC+Card"
+        "Grades": {"10": 20, "9.5": 25, "9": 40, "8": 10},
+        "Image": "https://via.placeholder.com/150?text=SGC"
     }
 
-def search_cgc(card_name):
+def fetch_cgc_population(card_name):
     return {
         "Company": "CGC",
-        "Population": "Sample CGC data",
-        "Image": "https://via.placeholder.com/150?text=CGC+Card"
+        "Grades": {"10": 5, "9.5": 18, "9": 22, "8": 8},
+        "Image": "https://via.placeholder.com/150?text=CGC"
     }
 
-# Run search and display results
+# Merge population data by grade
+def merge_population_data(all_results):
+    total_by_grade = defaultdict(int)
+    all_grades = sorted({grade for result in all_results for grade in result["Grades"]})
+
+    table_data = []
+    for grade in all_grades:
+        row = {"Grade": grade}
+        for result in all_results:
+            count = result["Grades"].get(grade, 0)
+            row[result["Company"]] = count
+            total_by_grade[grade] += count
+        row["Total"] = total_by_grade[grade]
+        table_data.append(row)
+
+    return pd.DataFrame(table_data)
+
+# Search trigger
 if search_button and card_name:
     with st.spinner("Fetching population data..."):
         results = [
-            search_psa(card_name),
-            search_bgs(card_name),
-            search_sgc(card_name),
-            search_cgc(card_name)
+            fetch_psa_population(card_name),
+            fetch_bgs_population(card_name),
+            fetch_sgc_population(card_name),
+            fetch_cgc_population(card_name)
         ]
 
-        st.write("### 📈 Population Report Results")
+        st.subheader("📸 Company Summaries")
         for result in results:
             col1, col2 = st.columns([1, 4])
             with col1:
                 image_url = result.get("Image")
-                if image_url and isinstance(image_url, str) and image_url.startswith("http"):
-                    st.image(image_url, width=150)
+                if image_url and image_url.startswith("http"):
+                    st.image(image_url, width=120)
                 else:
-                    st.write("No image available")
+                    st.write("No image")
             with col2:
                 st.markdown(f"**{result['Company']}**")
-                st.write(result["Population"])
-        st.success("Search completed.")
+                for grade, count in result["Grades"].items():
+                    st.write(f"{grade}: {count}")
+
+        st.subheader("📊 Total Population by Grade")
+        merged_df = merge_population_data(results)
+        st.dataframe(merged_df)
 
 
