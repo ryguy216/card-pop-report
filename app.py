@@ -7,15 +7,16 @@ from collections import defaultdict
 BING_API_KEY = "YOUR_BING_API_KEY"
 BING_SEARCH_URL = "https://api.bing.microsoft.com/v7.0/images/search"
 
+PLACEHOLDER_IMAGE = "https://via.placeholder.com/250x350?text=No+Image"
+
 st.set_page_config(page_title="Card Population Report with Images", layout="wide")
 st.title("📊 Card Population Report Aggregator with Bing Image Search")
-st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts and get card images from Bing.")
+st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts and get card images.")
 
 card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
 
 def fetch_psa_population(card_name):
-    # Mock data due to PSA API limitations
     return {
         "Company": "PSA",
         "Grades": {"10": 12, "9.5": 20, "9": 45, "8": 13},
@@ -52,12 +53,9 @@ def merge_population_data(all_results):
         row = {"Grade": grade}
         for result in all_results:
             count = result["Grades"].get(grade, 0)
-            if isinstance(count, (int, float)):
-                row[result["Company"]] = count
-                total_by_grade[grade] += count
-            else:
-                row[result["Company"]] = 0
-        row["Total"] = total_by_grade[grade]
+            row[result["Company"]] = count if isinstance(count, (int, float)) else 0
+            total_by_grade[grade] += row[result["Company"]]
+        row["Total Population"] = total_by_grade[grade]
         table_data.append(row)
 
     return pd.DataFrame(table_data)
@@ -78,10 +76,15 @@ def bing_image_search(query):
             return search_results["value"][0]["thumbnailUrl"]
         else:
             return None
-    except Exception:
+    except Exception as e:
+        st.error(f"Image search error: {e}")
         return None
 
-if search_button and card_name:
+def style_df_no_index_bold_grade(df):
+    styled = df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"})
+    return styled.hide(axis="index")
+
+if search_button and card_name.strip():
     with st.spinner("Fetching population data and images..."):
         results = [
             fetch_psa_population(card_name),
@@ -90,14 +93,11 @@ if search_button and card_name:
             fetch_cgc_population(card_name)
         ]
 
-        # Get Bing image for card
-        bing_img_url = bing_image_search(card_name)
+        # Bing Image search with fallback
+        bing_img_url = bing_image_search(card_name) or PLACEHOLDER_IMAGE
 
         st.subheader("🔎 Bing Image Search Result")
-        if bing_img_url:
-            st.image(bing_img_url, width=250)
-        else:
-            st.write("No image found on Bing.")
+        st.image(bing_img_url, width=250)
 
         st.subheader("📸 Company Population Summaries")
         for result in results:
@@ -106,15 +106,11 @@ if search_button and card_name:
             if "Error" in grades:
                 st.error(f"Error from {result['Company']}: {grades['Error']}")
                 continue
+
             df = pd.DataFrame(list(grades.items()), columns=["Grade", "Population"])
 
-            # Style grade column bold, hide row numbers
-            styled_df = df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"}).hide(axis="index")
-
-            st.dataframe(styled_df)
+            st.table(style_df_no_index_bold_grade(df))
 
         st.subheader("📊 Total Population by Grade")
         merged_df = merge_population_data(results)
-        # Bold grade column and hide index for total table as well
-        styled_total_df = merged_df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"}).hide(axis="index")
-        st.dataframe(styled_total_df)
+        st.table(style_df_no_index_bold_grade(merged_df))
