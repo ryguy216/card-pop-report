@@ -1,17 +1,12 @@
 import streamlit as st
-import requests
 import pandas as pd
 from collections import defaultdict
 
-# === CONFIG ===
-BING_API_KEY = "YOUR_BING_API_KEY"
-BING_SEARCH_URL = "https://api.bing.microsoft.com/v7.0/images/search"
-
 PLACEHOLDER_IMAGE = "https://via.placeholder.com/250x350?text=No+Image"
 
-st.set_page_config(page_title="Card Population Report with Images", layout="wide")
-st.title("📊 Card Population Report Aggregator with Bing Image Search")
-st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts and get card images.")
+st.set_page_config(page_title="Card Population Report", layout="wide")
+st.title("📊 Card Population Report Aggregator")
+st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts. Images are placeholders.")
 
 card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
@@ -60,32 +55,12 @@ def merge_population_data(all_results):
 
     return pd.DataFrame(table_data)
 
-def bing_image_search(query):
-    headers = {"Ocp-Apim-Subscription-Key": BING_API_KEY}
-    params = {
-        "q": query,
-        "count": 1,
-        "imageType": "Photo",
-        "safeSearch": "Moderate",
-    }
-    try:
-        response = requests.get(BING_SEARCH_URL, headers=headers, params=params)
-        response.raise_for_status()
-        search_results = response.json()
-        if "value" in search_results and len(search_results["value"]) > 0:
-            return search_results["value"][0]["thumbnailUrl"]
-        else:
-            return None
-    except Exception as e:
-        st.error(f"Image search error: {e}")
-        return None
-
 def style_df_no_index_bold_grade(df):
     styled = df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"})
     return styled.hide(axis="index")
 
 if search_button and card_name.strip():
-    with st.spinner("Fetching population data and images..."):
+    with st.spinner("Fetching population data..."):
         results = [
             fetch_psa_population(card_name),
             fetch_bgs_population(card_name),
@@ -93,11 +68,8 @@ if search_button and card_name.strip():
             fetch_cgc_population(card_name)
         ]
 
-        # Bing Image search with fallback
-        bing_img_url = bing_image_search(card_name) or PLACEHOLDER_IMAGE
-
-        st.subheader("🔎 Bing Image Search Result")
-        st.image(bing_img_url, width=250)
+        st.subheader("📸 Card Image")
+        st.image(PLACEHOLDER_IMAGE, width=250)
 
         st.subheader("📸 Company Population Summaries")
         for result in results:
@@ -108,7 +80,6 @@ if search_button and card_name.strip():
                 continue
 
             df = pd.DataFrame(list(grades.items()), columns=["Grade", "Population"])
-
             st.table(style_df_no_index_bold_grade(df))
 
         st.subheader("📊 Total Population by Grade")
