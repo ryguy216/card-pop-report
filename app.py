@@ -7,19 +7,24 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def search_psa(card_name):
-    url = f"https://www.psacard.com/pop/results?search={card_name.replace(' ', '+')}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    import requests
+    from bs4 import BeautifulSoup
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    url = f"https://www.psacard.com/pop/search?query={card_name}"
     response = requests.get(url, headers=headers, verify=False)
-    soup = BeautifulSoup(response.text, "html.parser")
-    table = soup.find("table")
-    psa_data = []
-    if table:
-        rows = table.find_all("tr")
-        for row in rows:
-            cols = row.find_all("td")
-            if cols:
-                psa_data.append([col.get_text(strip=True) for col in cols])
-    return psa_data
+    
+    if response.status_code != 200:
+        return "Error: PSA page not reachable"
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # You can customize the scraping logic here depending on how PSA structures their page
+    return "PSA page scraped successfully (placeholder)"
+
 
 def search_sgc(card_name):
     url = f"https://sgccard.com/population-report?search={card_name.replace(' ', '+')}"
