@@ -2,11 +2,14 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 def search_psa(card_name):
     url = f"https://www.psacard.com/pop/results?search={card_name.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, verify=False)
     soup = BeautifulSoup(response.text, "html.parser")
     table = soup.find("table")
     psa_data = []
@@ -21,7 +24,7 @@ def search_psa(card_name):
 def search_sgc(card_name):
     url = f"https://sgccard.com/population-report?search={card_name.replace(' ', '+')}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
+   response = requests.get(url, headers=headers, verify=False)
     soup = BeautifulSoup(response.text, "html.parser")
     table = soup.find("table")
     sgc_data = []
