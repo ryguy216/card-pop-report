@@ -15,7 +15,7 @@ card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
 
 def fetch_psa_population(card_name):
-    # Same as before, simplified mock due to PSA API issues
+    # Mock data due to PSA API limitations
     return {
         "Company": "PSA",
         "Grades": {"10": 12, "9.5": 20, "9": 45, "8": 13},
@@ -78,7 +78,7 @@ def bing_image_search(query):
             return search_results["value"][0]["thumbnailUrl"]
         else:
             return None
-    except Exception as e:
+    except Exception:
         return None
 
 if search_button and card_name:
@@ -107,8 +107,14 @@ if search_button and card_name:
                 st.error(f"Error from {result['Company']}: {grades['Error']}")
                 continue
             df = pd.DataFrame(list(grades.items()), columns=["Grade", "Population"])
-            st.dataframe(df)
+
+            # Style grade column bold, hide row numbers
+            styled_df = df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"}).hide(axis="index")
+
+            st.dataframe(styled_df)
 
         st.subheader("📊 Total Population by Grade")
         merged_df = merge_population_data(results)
-        st.dataframe(merged_df)
+        # Bold grade column and hide index for total table as well
+        styled_total_df = merged_df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"}).hide(axis="index")
+        st.dataframe(styled_total_df)
