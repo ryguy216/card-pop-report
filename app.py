@@ -61,7 +61,7 @@ def fetch_cgc_population(card_name):
         "Image": "https://via.placeholder.com/150?text=CGC"
     }
 
-# Merge population data by grade
+# Merge population data by grade (with type check)
 def merge_population_data(all_results):
     total_by_grade = defaultdict(int)
     all_grades = sorted({grade for result in all_results for grade in result["Grades"]})
@@ -71,8 +71,11 @@ def merge_population_data(all_results):
         row = {"Grade": grade}
         for result in all_results:
             count = result["Grades"].get(grade, 0)
-            row[result["Company"]] = count
-            total_by_grade[grade] += count
+            if isinstance(count, (int, float)):
+                row[result["Company"]] = count
+                total_by_grade[grade] += count
+            else:
+                row[result["Company"]] = 0
         row["Total"] = total_by_grade[grade]
         table_data.append(row)
 
@@ -105,6 +108,3 @@ if search_button and card_name:
         st.subheader("📊 Total Population by Grade")
         merged_df = merge_population_data(results)
         st.dataframe(merged_df)
-
-
-
