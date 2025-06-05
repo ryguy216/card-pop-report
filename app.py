@@ -3,14 +3,17 @@ import requests
 import pandas as pd
 from collections import defaultdict
 
-st.set_page_config(page_title="Card Population Report", layout="wide")
-st.title("📊 Card Population Report Aggregator")
-st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts by grade.")
+# === CONFIG ===
+GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY"
+GOOGLE_CSE_ID = "YOUR_GOOGLE_CSE_ID"
+
+st.set_page_config(page_title="Card Population Report with Images", layout="wide")
+st.title("📊 Card Population Report Aggregator with Google Image Search")
+st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts and get card images from Google.")
 
 card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
 
-# PSA population fetch via API with SSL verification disabled
 def fetch_psa_population(card_name):
     url = "https://www.psacard.com/api/population/card/search"
     headers = {
@@ -34,34 +37,33 @@ def fetch_psa_population(card_name):
                 pop = item.get("population", 0)
                 results[grade] += pop
 
-        return {"Company": "PSA", "Grades": dict(results), "Image": "https://via.placeholder.com/150?text=PSA"}
+        return {"Company": "PSA", "Grades": dict(results), "Image": None}
 
     except Exception as e:
         return {"Company": "PSA", "Grades": {"Error": str(e)}, "Image": None}
 
-# Sample placeholders for other companies
+# Mock functions for other graders
 def fetch_bgs_population(card_name):
     return {
         "Company": "BGS",
         "Grades": {"10": 15, "9.5": 30, "9": 50, "8.5": 12},
-        "Image": "https://via.placeholder.com/150?text=BGS"
+        "Image": None
     }
 
 def fetch_sgc_population(card_name):
     return {
         "Company": "SGC",
         "Grades": {"10": 20, "9.5": 25, "9": 40, "8": 10},
-        "Image": "https://via.placeholder.com/150?text=SGC"
+        "Image": None
     }
 
 def fetch_cgc_population(card_name):
     return {
         "Company": "CGC",
         "Grades": {"10": 5, "9.5": 18, "9": 22, "8": 8},
-        "Image": "https://via.placeholder.com/150?text=CGC"
+        "Image": None
     }
 
-# Merge population data by grade (with type check)
 def merge_population_data(all_results):
     total_by_grade = defaultdict(int)
     all_grades = sorted({grade for result in all_results for grade in result["Grades"]})
@@ -81,9 +83,29 @@ def merge_population_data(all_results):
 
     return pd.DataFrame(table_data)
 
-# Search trigger
+def google_image_search(query):
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": GOOGLE_API_KEY,
+        "cx": GOOGLE_CSE_ID,
+        "q": query,
+        "searchType": "image",
+        "num": 1,
+        "imgSize": "medium",
+        "safe": "off"
+    }
+    try:
+        resp = requests.get(search_url, params=params)
+        data = resp.json()
+        if "items" in data and len(data["items"]) > 0:
+            return data["items"][0]["link"]
+        else:
+            return None
+    except Exception as e:
+        return None
+
 if search_button and card_name:
-    with st.spinner("Fetching population data..."):
+    with st.spinner("Fetching population data and images..."):
         results = [
             fetch_psa_population(card_name),
             fetch_bgs_population(card_name),
@@ -91,19 +113,24 @@ if search_button and card_name:
             fetch_cgc_population(card_name)
         ]
 
-        st.subheader("📸 Company Summaries")
+        # Get a Google image for the card overall
+        google_img_url = google_image_search(card_name)
+
+        st.subheader("🔎 Google Image Search Result")
+        if google_img_url:
+            st.image(google_img_url, width=250)
+        else:
+            st.write("No image found on Google.")
+
+        st.subheader("📸 Company Population Summaries")
         for result in results:
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                image_url = result.get("Image")
-                if image_url and image_url.startswith("http"):
-                    st.image(image_url, width=120)
-                else:
-                    st.write("No image")
-            with col2:
-                st.markdown(f"**{result['Company']}**")
-                for grade, count in result["Grades"].items():
-                    st.write(f"{grade}: {count}")
+            st.markdown(f"### {result['Company']}")
+            grades = result["Grades"]
+            if "Error" in grades:
+                st.error(f"Error from {result['Company']}: {grades['Error']}")
+                continue
+            df = pd.DataFrame(list(grades.items()), columns=["Grade", "Population"])
+            st.dataframe(df)
 
         st.subheader("📊 Total Population by Grade")
         merged_df = merge_population_data(results)
