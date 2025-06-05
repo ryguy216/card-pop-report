@@ -10,7 +10,7 @@ st.write("Enter a card name to search PSA, BGS, SGC, and CGC population counts b
 card_name = st.text_input("Card Name")
 search_button = st.button("🔍 Search")
 
-# PSA population fetch via API
+# PSA population fetch via API with SSL verification disabled
 def fetch_psa_population(card_name):
     url = "https://www.psacard.com/api/population/card/search"
     headers = {
@@ -24,7 +24,7 @@ def fetch_psa_population(card_name):
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, verify=False)
         data = response.json()
 
         results = defaultdict(int)
@@ -105,5 +105,6 @@ if search_button and card_name:
         st.subheader("📊 Total Population by Grade")
         merged_df = merge_population_data(results)
         st.dataframe(merged_df)
+
 
 
