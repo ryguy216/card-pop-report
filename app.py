@@ -1,113 +1,79 @@
+# app.py
+
 import streamlit as st
+import requests
 import pandas as pd
-from collections import defaultdict
 
-# --- Page Setup ---
-st.set_page_config(page_title="Card Pop Report", layout="wide")
-st.markdown("<h1 style='text-align: center;'>📈 Multi-Grader Card Population Report</h1>", unsafe_allow_html=True)
+# --- Configuration ---
+EBAY_APP_ID = "Your-eBay-App-ID"  # Replace with your actual eBay App ID
 
-# --- Input ---
-with st.container():
-    st.markdown("Enter a card name to fetch population counts from **PSA**, **BGS**, **SGC**, and **CGC**.")
-    card_name = st.text_input("Card Name", placeholder="e.g. 2018 Panini Prizm Luka Doncic #280")
-    search_button = st.button("🔍 Search Pop Reports")
+# --- Helper Functions ---
 
-# --- Placeholder Image URL ---
-PLACEHOLDER_IMAGE = "https://via.placeholder.com/250x350?text=No+Image"
+def search_ebay_image(card_name):
+    try:
+        headers = {
+            "X-EBAY-C-ENDUSERCTX": "contextualLocation=country=US",
+            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+            "Content-Type": "application/json"
+        }
+        params = {
+            "q": card_name,
+            "limit": 1
+        }
+        url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={card_name}&limit=1"
+        headers["Authorization"] = f"Bearer {EBAY_APP_ID}"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            items = response.json().get("itemSummaries", [])
+            if items:
+                return items[0].get("image", {}).get("imageUrl")
+        return None
+    except Exception as e:
+        return None
 
-# --- Fetch Population Functions ---
-def fetch_psa_population(card_name):
+def fetch_mock_populations(card_name):
+    # Placeholder function for demo purposes. Replace with actual API/web scraping.
     return {
-        "Company": "PSA",
-        "Grades": {
-            "10": 12,
-            "9": 45,
-            "8": 13
-        },
-        "Image": None
+        "PSA": {"Grades": {"10": 500, "9": 800, "8": 300}},
+        "BGS": {"Grades": {"10": 200, "9": 400, "8": 150}},
+        "SGC": {"Grades": {"10": 100, "9": 250, "8": 100}},
+        "CGC": {"Grades": {"10": 120, "9": 260, "8": 90}}
     }
 
-def fetch_bgs_population(card_name):
-    return {
-        "Company": "BGS",
-        "Grades": {
-            "10": 15,
-            "9.5": 30,
-            "9": 50,
-            "8.5": 12
-        },
-        "Image": None
-    }
+def build_dataframe(pop_data):
+    all_grades = set()
+    for data in pop_data.values():
+        all_grades.update(data["Grades"].keys())
 
-def fetch_sgc_population(card_name):
-    return {
-        "Company": "SGC",
-        "Grades": {
-            "10": 20,
-            "9.5": 25,
-            "9": 40,
-            "8": 10
-        },
-        "Image": None
-    }
+    sorted_grades = sorted(all_grades, key=lambda x: float(x), reverse=True)
+    df = pd.DataFrame(index=sorted_grades)
 
-def fetch_cgc_population(card_name):
-    return {
-        "Company": "CGC",
-        "Grades": {
-            "10": 5,
-            "9.5": 18,
-            "9": 22,
-            "8": 8
-        },
-        "Image": None
-    }
+    for company, data in pop_data.items():
+        counts = {grade: data["Grades"].get(grade, 0) for grade in sorted_grades}
+        df[company] = pd.Series(counts)
 
-# --- Merge and Style ---
-def merge_population_data(all_results):
-    total_by_grade = defaultdict(int)
-    all_grades = sorted({grade for result in all_results for grade in result["Grades"]})
+    df["Total"] = df.sum(axis=1)
+    df.index.name = "Grade"
+    return df
 
-    table_data = []
-    for grade in all_grades:
-        row = {"Grade": grade}
-        for result in all_results:
-            company = result["Company"]
-            count = result["Grades"].get(grade, 0)
-            row[company] = count
-            total_by_grade[grade] += count
-        row["Total Population"] = total_by_grade[grade]
-        table_data.append(row)
+# --- Streamlit UI ---
+st.set_page_config(page_title="Card Population Report", layout="wide")
+st.title("Card Population Aggregator")
 
-    return pd.DataFrame(table_data)
+card_name = st.text_input("Enter Card Name (e.g., 2018 Panini Hoops Luka Doncic RC):")
 
-def style_df_bold_grades(df):
-    return df.style.set_properties(subset=["Grade"], **{"font-weight": "bold"}).hide(axis="index")
+if card_name:
+    st.subheader(f"Results for: {card_name}")
+    with st.spinner("Fetching data..."):
+        image_url = search_ebay_image(card_name)
+        population_data = fetch_mock_populations(card_name)
+        df = build_dataframe(population_data)
 
-# --- Main Logic ---
-if search_button and card_name.strip():
-    with st.spinner("Gathering data..."):
-        results = [
-            fetch_psa_population(card_name),
-            fetch_bgs_population(card_name),
-            fetch_sgc_population(card_name),
-            fetch_cgc_population(card_name)
-        ]
+    if image_url:
+        st.image(image_url, width=250)
+    else:
+        st.info("No image found.")
 
-        # --- Image Display ---
-        st.markdown("### 🖼️ Card Image Preview")
-        st.image(PLACEHOLDER_IMAGE, width=250, caption="Image placeholder", use_column_width=False)
-
-        # --- Individual Tables ---
-        st.markdown("### 📋 Grader Population Tables")
-        col1, col2 = st.columns(2)
-        for i, result in enumerate(results):
-            with col1 if i % 2 == 0 else col2:
-                st.markdown(f"#### {result['Company']}")
-                df = pd.DataFrame(list(result["Grades"].items()), columns=["Grade", "Population"])
-                st.table(style_df_bold_grades(df))
-
-        # --- Merged Table ---
-        st.markdown("### 📊 Combined Total Population by Grade")
-        merged_df = merge_population_data(results)
-        st.table(style_df_bold_grades(merged_df))
+    st.dataframe(df.style.format("{:.0f}"))
+else:
+    st.info("Please enter a card name above to see population and image data.")
